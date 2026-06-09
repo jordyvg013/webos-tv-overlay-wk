@@ -1,24 +1,16 @@
 import 'dart:async';
-import 'dart:js_interop';
-import 'dart:ui' as ui;
+import 'dart:js_util' as js_util; // Veilige, universele manier om tv-functies aan te roepen
+import 'dart:ui_web' as ui_web;   // De juiste plek voor platformViewRegistry in moderne Flutter
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:web/web.dart' as web; // De moderne, WASM-vriendelijke web-bibliotheek
+import 'package:web/web.dart' as web; 
 
-// We maken een sterke koppeling met de officiële webOS tuner-functies
-@JS()
-extension type WebOSBroadcastElement(web.HTMLObjectElement _element) implements web.HTMLObjectElement {
-  external void channelUp();
-  external void channelDown();
-}
-
-// Global reference naar onze coax-tuner zodat we er overal bij kunnen
-WebOSBroadcastElement? _broadcastElement;
+// Global reference naar onze coax-tuner
+web.HTMLObjectElement? _broadcastElement;
 
 void main() {
-  // We registreren het officiële webOS TV broadcast-element voor de coax-tuner
-  // ignore: undefined_prefixed_name
-  ui.platformViewRegistry.registerViewFactory(
+  // We registreren het officiële webOS TV broadcast-element met de nieuwe ui_web import
+  ui_web.platformViewRegistry.registerViewFactory(
     'webos-coax-tuner',
     (int viewId) {
       final obj = web.document.createElement('object') as web.HTMLObjectElement;
@@ -28,7 +20,7 @@ void main() {
       obj.style.position = 'absolute';
       obj.id = 'coax-broadcast';
       
-      _broadcastElement = WebOSBroadcastElement(obj);
+      _broadcastElement = obj;
       return obj;
     },
   );
@@ -80,11 +72,15 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
       
       // webOS vertaalt de fysieke CH+/CH- knoppen naar 'ChannelUp' (427) en 'ChannelDown' (428)
       if (keyEvent.key == 'ChannelUp' || keyEvent.keyCode == 427 || keyEvent.key == 'PageUp') {
-        _broadcastElement?.channelUp();
+        if (_broadcastElement != null) {
+          js_util.callMethod(_broadcastElement!, 'channelUp', []);
+        }
       } else if (keyEvent.key == 'ChannelDown' || keyEvent.keyCode == 428 || keyEvent.key == 'PageDown') {
-        _broadcastElement?.channelDown();
+        if (_broadcastElement != null) {
+          js_util.callMethod(_broadcastElement!, 'channelDown', []);
+        }
       }
-    }.toJS);
+    });
 
     _lionController = VideoPlayerController.asset(
       'assets/videos/kling_20260609_作品_A_highly_d_4419_0.mp4',
@@ -174,7 +170,7 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
                         type: NotificationType.yellowCard,
                         title: "GELE KAART",
                         subtitle: "Virgil van Dijk (NED) - 42'",
-                      ),
+                  ),
                       child: const Text("🟨 Geel", style: TextStyle(color: Colors.black)),
                     ),
                     ElevatedButton(
@@ -190,19 +186,27 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 25),
                 
-                // ZAP KNOPPEN (Voor handmatige test op het scherm)
+                // ZAP KNOPPEN (Voor handmatige test op het scherm of via muis)
                 Wrap(
                   spacing: 15,
                   children: [
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
-                      onPressed: () => _broadcastElement?.channelDown(),
+                      onPressed: () {
+                        if (_broadcastElement != null) {
+                          js_util.callMethod(_broadcastElement!, 'channelDown', []);
+                        }
+                      },
                       icon: const Icon(Icons.arrow_downward, color: Colors.white),
                       label: const Text("Vorige Zender", style: TextStyle(color: Colors.white)),
                     ),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
-                      onPressed: () => _broadcastElement?.channelUp(),
+                      onPressed: () {
+                        if (_broadcastElement != null) {
+                          js_util.callMethod(_broadcastElement!, 'channelUp', []);
+                        }
+                      },
                       icon: const Icon(Icons.arrow_upward, color: Colors.white),
                       label: const Text("Volgende Zender", style: TextStyle(color: Colors.white)),
                     ),
@@ -288,10 +292,10 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
   Widget _buildLeftAsset() {
     switch (_currentType) {
       case NotificationType.yellowCard:
-        return Image.asset('assets/images/Copilot_20260609_112605-removebg-preview.png', fit: Alignment.contain,
+        return Image.asset('assets/images/Copilot_20260609_112605-removebg-preview.png', fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Icon(Icons.style, color: Colors.yellow, size: 60));
       case NotificationType.redCard:
-        return Image.asset('assets/images/0VCil-removebg-preview.png', fit: Alignment.contain,
+        return Image.asset('assets/images/0VCil-removebg-preview.png', fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Icon(Icons.style, color: Colors.red, size: 60));
       case NotificationType.goal:
       default:
