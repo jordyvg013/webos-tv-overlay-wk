@@ -40,10 +40,10 @@ jobs:
       - name: Installeer dependencies
         run: flutter pub get
 
-      # Vanaf recente versies is de HTML-renderer verwijderd en is Wasm/CanvasKit de standaard.
+      # '--base-href="."' voorkomt een zwart scherm op webOS doordat scripts relatief geladen worden.
       # Minificatie-problemen voorkomen we nu door '--no-minify' in de ares-package stap.
       - name: Bouw de Flutter Web basis
-        run: flutter build web --release
+        run: flutter build web --release --base-href="."
 
       - name: Configureer webOS App Bestanden
         run: |
