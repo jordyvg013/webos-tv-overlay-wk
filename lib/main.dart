@@ -1,15 +1,20 @@
 import 'dart:async';
-import 'dart:js_util' as js_util; // Veilige, universele manier om tv-functies aan te roepen
-import 'dart:ui_web' as ui_web;   // De juiste plek voor platformViewRegistry in moderne Flutter
+import 'dart:js_interop'; // Noodzakelijk voor de .toJS conversie
+import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:web/web.dart' as web; 
+
+// Schone extension interop zonder de overbodige @JS() op klasseniveau
+extension WebOSBroadcastExtension on web.HTMLObjectElement {
+  external void channelUp();
+  external void channelDown();
+}
 
 // Global reference naar onze coax-tuner
 web.HTMLObjectElement? _broadcastElement;
 
 void main() {
-  // We registreren het officiële webOS TV broadcast-element met de nieuwe ui_web import
   ui_web.platformViewRegistry.registerViewFactory(
     'webos-coax-tuner',
     (int viewId) {
@@ -66,21 +71,20 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
   void initState() {
     super.initState();
 
-    // LUISTEREN NAAR DE LG AFSTANDSBEDIENING
-    web.window.addEventListener('keydown', (web.Event event) {
-      final keyEvent = event as web.KeyboardEvent;
-      
-      // webOS vertaalt de fysieke CH+/CH- knoppen naar 'ChannelUp' (427) en 'ChannelDown' (428)
-      if (keyEvent.key == 'ChannelUp' || keyEvent.keyCode == 427 || keyEvent.key == 'PageUp') {
-        if (_broadcastElement != null) {
-          js_util.callMethod(_broadcastElement!, 'channelUp', []);
-        }
-      } else if (keyEvent.key == 'ChannelDown' || keyEvent.keyCode == 428 || keyEvent.key == 'PageDown') {
-        if (_broadcastElement != null) {
-          js_util.callMethod(_broadcastElement!, 'channelDown', []);
-        }
+    // Jouw geoptimaliseerde webOS keyhandler via document.onkeydown
+    web.document.onkeydown = ((web.KeyboardEvent event) {
+      switch (event.keyCode) {
+        case 427: // webOS ChannelUp
+        case 33:  // PageUp fallback voor testen in browser
+          _broadcastElement?.channelUp();
+          break;
+
+        case 428: // webOS ChannelDown
+        case 34:  // PageDown fallback voor testen in browser
+          _broadcastElement?.channelDown();
+          break;
       }
-    });
+    }).toJS;
 
     _lionController = VideoPlayerController.asset(
       'assets/videos/kling_20260609_作品_A_highly_d_4419_0.mp4',
@@ -151,7 +155,6 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Score/Kaart triggers
                 Wrap(
                   spacing: 15,
                   children: [
@@ -170,7 +173,7 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
                         type: NotificationType.yellowCard,
                         title: "GELE KAART",
                         subtitle: "Virgil van Dijk (NED) - 42'",
-                  ),
+                      ),
                       child: const Text("🟨 Geel", style: TextStyle(color: Colors.black)),
                     ),
                     ElevatedButton(
@@ -186,27 +189,19 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
                 ),
                 const SizedBox(height: 25),
                 
-                // ZAP KNOPPEN (Voor handmatige test op het scherm of via muis)
+                // ZAP KNOPPEN
                 Wrap(
                   spacing: 15,
                   children: [
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
-                      onPressed: () {
-                        if (_broadcastElement != null) {
-                          js_util.callMethod(_broadcastElement!, 'channelDown', []);
-                        }
-                      },
+                      onPressed: () => _broadcastElement?.channelDown(),
                       icon: const Icon(Icons.arrow_downward, color: Colors.white),
                       label: const Text("Vorige Zender", style: TextStyle(color: Colors.white)),
                     ),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
-                      onPressed: () {
-                        if (_broadcastElement != null) {
-                          js_util.callMethod(_broadcastElement!, 'channelUp', []);
-                        }
-                      },
+                      onPressed: () => _broadcastElement?.channelUp(),
                       icon: const Icon(Icons.arrow_upward, color: Colors.white),
                       label: const Text("Volgende Zender", style: TextStyle(color: Colors.white)),
                     ),
