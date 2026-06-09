@@ -40,11 +40,10 @@ jobs:
       - name: Installeer dependencies
         run: flutter pub get
 
-      # --web-renderer html vermijdt de canvaskit.js minificatiefout:
-      # ares-package kan de grote CanvasKit WASM-bundle niet minificeren.
-      # HTML-renderer is kleiner, sneller te laden, en werkt prima op webOS.
+      # Vanaf recente versies is de HTML-renderer verwijderd en is Wasm/CanvasKit de standaard.
+      # Minificatie-problemen voorkomen we nu door '--no-minify' in de ares-package stap.
       - name: Bouw de Flutter Web basis
-        run: flutter build web --release --web-renderer html
+        run: flutter build web --release
 
       - name: Configureer webOS App Bestanden
         run: |
@@ -68,8 +67,8 @@ jobs:
           }
           EOF
 
-      - name: Verpak de app tot webOS .ipk bestand
-        run: ares-package build/web -o .
+      - name: Verpak de app tot webOS .ipk bestand (zonder dubbele minificatie)
+        run: ares-package build/web -o . --no-minify
 
       - name: Upload het .ipk bestand naar GitHub
         uses: actions/upload-artifact@v4
