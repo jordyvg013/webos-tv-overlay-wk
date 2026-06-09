@@ -1,5 +1,5 @@
 name: webos_tv_overlay
-description: "A Flutter webOS TV Match Overlay Test Project."
+description: "Flutter webOS TV Match Overlay – WK editie"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   video_player: ^2.9.1
+  web: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -18,8 +19,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-  # Hier koppelen we de mappen die je op GitHub hebt aangemaakt
   assets:
-    - assets/video/
-    - assets/image/
+    - assets/videos/
+    - assets/images/
