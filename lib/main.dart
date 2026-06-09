@@ -1,19 +1,36 @@
 import 'dart:async';
-import 'dart:html' as html;
+import 'dart:js_interop';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:web/web.dart' as web; // De moderne, WASM-vriendelijke web-bibliotheek
+
+// We maken een sterke koppeling met de officiële webOS tuner-functies
+@JS()
+extension type WebOSBroadcastElement(web.HTMLObjectElement _element) implements web.HTMLObjectElement {
+  external void channelUp();
+  external void channelDown();
+}
+
+// Global reference naar onze coax-tuner zodat we er overal bij kunnen
+WebOSBroadcastElement? _broadcastElement;
 
 void main() {
   // We registreren het officiële webOS TV broadcast-element voor de coax-tuner
   // ignore: undefined_prefixed_name
   ui.platformViewRegistry.registerViewFactory(
     'webos-coax-tuner',
-    (int viewId) => html.ObjectElement()
-      ..type = 'video/broadcast'
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.position = 'absolute',
+    (int viewId) {
+      final obj = web.document.createElement('object') as web.HTMLObjectElement;
+      obj.type = 'video/broadcast';
+      obj.style.width = '100%';
+      obj.style.height = '100%';
+      obj.style.position = 'absolute';
+      obj.id = 'coax-broadcast';
+      
+      _broadcastElement = WebOSBroadcastElement(obj);
+      return obj;
+    },
   );
 
   runApp(const TvOverlayTestApp());
@@ -29,9 +46,7 @@ class TvOverlayTestApp extends StatelessWidget {
     return MaterialApp(
       title: 'webOS Match Overlay Test',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-      ),
+      theme: ThemeData(brightness: Brightness.dark),
       home: const MatchScreen(),
     );
   }
@@ -58,6 +73,18 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+
+    // LUISTEREN NAAR DE LG AFSTANDSBEDIENING
+    web.window.addEventListener('keydown', (web.Event event) {
+      final keyEvent = event as web.KeyboardEvent;
+      
+      // webOS vertaalt de fysieke CH+/CH- knoppen naar 'ChannelUp' (427) en 'ChannelDown' (428)
+      if (keyEvent.key == 'ChannelUp' || keyEvent.keyCode == 427 || keyEvent.key == 'PageUp') {
+        _broadcastElement?.channelUp();
+      } else if (keyEvent.key == 'ChannelDown' || keyEvent.keyCode == 428 || keyEvent.key == 'PageDown') {
+        _broadcastElement?.channelDown();
+      }
+    }.toJS);
 
     _lionController = VideoPlayerController.asset(
       'assets/videos/kling_20260609_作品_A_highly_d_4419_0.mp4',
@@ -115,52 +142,77 @@ class _MatchScreenState extends State<MatchScreen> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // Belangrijk: transparant zodat tv-signaal ademt
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // ── LAAG 1: HET LIVE COAX TV SIGNAAL ──
-          // Dit vertelt de LG TV dat hij de lopende zender hier fullscreen moet tonen
+          // LAAG 1: COAX TV SIGNAAL
           const Positioned.fill(
             child: HtmlElementView(viewType: 'webos-coax-tuner'),
           ),
 
-          // ── LAAG 2: TEST KNOPPEN (Zweven over de tv-zender heen) ──
+          // LAAG 2: BEDIENINGSKNOPPEN
           Center(
-            child: Wrap(
-              spacing: 20,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6A00)),
-                  onPressed: () => triggerNotification(
-                    type: NotificationType.goal,
-                    title: "DOELPUNT!",
-                    subtitle: "NEDERLAND 1 - 0 BRAZILIË",
-                  ),
-                  child: const Text("🦁 Doelpunt", style: TextStyle(color: Colors.white)),
+                // Score/Kaart triggers
+                Wrap(
+                  spacing: 15,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6A00)),
+                      onPressed: () => triggerNotification(
+                        type: NotificationType.goal,
+                        title: "DOELPUNT!",
+                        subtitle: "NEDERLAND 1 - 0 BRAZILIË",
+                      ),
+                      child: const Text("🦁 Doelpunt", style: TextStyle(color: Colors.white)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow.shade700),
+                      onPressed: () => triggerNotification(
+                        type: NotificationType.yellowCard,
+                        title: "GELE KAART",
+                        subtitle: "Virgil van Dijk (NED) - 42'",
+                      ),
+                      child: const Text("🟨 Geel", style: TextStyle(color: Colors.black)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => triggerNotification(
+                        type: NotificationType.redCard,
+                        title: "RODE KAART",
+                        subtitle: "Denzel Dumfries (NED) - 89'",
+                      ),
+                      child: const Text("🟥 Rood", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow.shade700),
-                  onPressed: () => triggerNotification(
-                    type: NotificationType.yellowCard,
-                    title: "GELE KAART",
-                    subtitle: "Virgil van Dijk (NED) - 42'",
-                  ),
-                  child: const Text("🟨 Geel", style: TextStyle(color: Colors.black)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () => triggerNotification(
-                    type: NotificationType.redCard,
-                    title: "RODE KAART",
-                    subtitle: "Denzel Dumfries (NED) - 89'",
-                  ),
-                  child: const Text("🟥 Rood", style: TextStyle(color: Colors.white)),
+                const SizedBox(height: 25),
+                
+                // ZAP KNOPPEN (Voor handmatige test op het scherm)
+                Wrap(
+                  spacing: 15,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
+                      onPressed: () => _broadcastElement?.channelDown(),
+                      icon: const Icon(Icons.arrow_downward, color: Colors.white),
+                      label: const Text("Vorige Zender", style: TextStyle(color: Colors.white)),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade900),
+                      onPressed: () => _broadcastElement?.channelUp(),
+                      icon: const Icon(Icons.arrow_upward, color: Colors.white),
+                      label: const Text("Volgende Zender", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
 
-          // ── LAAG 3: DE GEANIMEERDE OVERLAY ──
+          // LAAG 3: DE BANNER OVERLAY
           AnimatedPositioned(
             duration: const Duration(milliseconds: 600),
             curve: Curves.easeOutCubic,
