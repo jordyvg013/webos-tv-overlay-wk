@@ -1,18 +1,12 @@
-name: Deploy to GitHub Pages
+name: Bouw webOS App (.ipk)
 
 on:
   push:
     branches:
-      - main # Triggert de bouw telkens als je iets aanpast in 'main'
+      - main
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   build:
@@ -22,7 +16,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java (Nodig voor Flutter)
+      - name: Setup Node.js (Nodig voor LG Tools)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installeer LG webOS CLI Tools
+        run: npm install -g @webosose/ares-cli
+
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
@@ -33,27 +35,41 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Genereer missende web-bestanden
+      - name: Genereer web-bestanden
         run: flutter create . --platforms web
 
       - name: Installeer dependencies
         run: flutter pub get
 
-      - name: Bouw de Web App
-        run: flutter build web --base-href "/${{ github.event.repository.name }}/"
+      - name: Bouw de Flutter Web basis
+        run: flutter build web --release
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Configureer webOS App Bestanden
+        run: |
+          # Zorg dat de build map er is en kopieer een van je afbeeldingen als app-icoon
+          mkdir -p build/web
+          cp assets/images/0VCil-removebg-preview.png build/web/icon.png
+          
+          # Maak het verplichte appinfo.json bestand aan voor webOS
+          cat <<EOF > build/web/appinfo.json
+          {
+              "id": "com.jordy.webostvoverlay",
+              "version": "1.0.0",
+              "vendor": "Jordy",
+              "type": "web",
+              "main": "index.html",
+              "title": "Match Overlay WK",
+              "icon": "icon.png"
+          }
+          EOF
+
+      - name: Verpak de app tot webOS .ipk bestand
+        run: |
+          ares-package build/web -o .
+
+      - name: Upload het .ipk bestand naar GitHub
+        uses: actions/upload-artifact@v4
         with:
-          path: build/web
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          name: webos-app-package
+          path: "*.ipk"
+          
